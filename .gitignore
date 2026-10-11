@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Keep the reviewed Windows packaging configuration.
+!RS02Configurator.spec
+hardware-can-log.csv
