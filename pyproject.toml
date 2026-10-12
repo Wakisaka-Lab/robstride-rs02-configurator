@@ -17,6 +17,7 @@ packages = ["gui", "service", "transport", "protocol", "robstride_dynamics"]
 testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
+extend-exclude = [".build-tools"]
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 [tool.ruff.lint.per-file-ignores]

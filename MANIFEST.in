@@ -3,3 +3,4 @@ include hardware_smoke_test.py desktop_main.py RS02Configurator.spec
 include uv.lock .python-version
 include vendor/LICENSE.robstride vendor/PROVENANCE.md
 recursive-include docs *.md
+recursive-include scripts *.ps1

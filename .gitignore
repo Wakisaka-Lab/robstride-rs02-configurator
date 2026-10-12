@@ -222,3 +222,6 @@ __marimo__/
 # Keep the reviewed Windows packaging configuration.
 !RS02Configurator.spec
 hardware-can-log.csv
+
+# Local Windows build tool environment
+.build-tools/

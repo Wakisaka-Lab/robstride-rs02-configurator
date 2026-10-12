@@ -1,52 +1,77 @@
-# Windows 10/11 x64: USB2CAN-X2 setup
+# Windows 11／10：USB2CAN-X2の準備（日本語）
 
-Use Python 3.11 x64 and the locked dependencies from README.md. Manufacturer reference:
-https://github.com/INNO-MAKER/USB2CAN-X2 (`For Windows/Python` and USB2CAN-X2 UserManual).
-This repository uses **python-can gs_usb**, not the manufacturer's C# DLL API.
-No physical X2 or RS02 was available during development.
+Python 3.11 x64を使用します。ビルドはREADME.mdの `scripts/build_windows.ps1` に従ってください。
+メーカー資料：https://github.com/INNO-MAKER/USB2CAN-X2
+（`For Windows/Python` とUSB2CAN-X2 UserManual）。このアプリはメーカーC# DLLではなく
+**python-can gs_usb** を使います。開発中に実機は接続していません。
 
-1. Disconnect motor power. Connect only the X2 to USB. Record its product name, serial, VID/PID,
-   current driver and physical CAN0/CAN1 label. Close vendor CAN software and other CAN clients.
-2. Obtain Zadig from https://zadig.akeo.ie/ and run it as administrator. Select
-   **Options → List All Devices**. Identify the X2 precisely; do not select another USB device,
-   keyboard, hub or system device. Firmware/Windows may expose one USB interface for both CAN channels;
-   the application routes CAN0/CAN1 in gs_usb packets, not by assuming separate USB interfaces.
-3. Install/replace the driver for the confirmed X2 interface with **libusbK**.
-   PyUSB/libusb1 can use libusbK; WinUSB is another supported libusb binding if libusbK is unavailable.
-   Do not choose **libusb-win32** (the manufacturer warns it can cause incorrect recognition).
-   Record the original binding for restoration through Device Manager or vendor driver installation.
-   Replacing a driver may stop other vendor applications from working; do not share the adapter.
-4. Install the project. `libusb-package` provides libusb-1.0.dll with matching architecture;
-   do not download random DLLs, disable verification, or overwrite Windows System32 DLLs.
-5. With motor power still off, run:
+## 1. ドライバーの準備
 
-   ```powershell
-   uv run --frozen python hardware_smoke_test.py --list
-   ```
+1. モーターの電源を切り、X2だけをUSBに接続します。製品名・シリアル・VID/PID・元のドライバーを記録します。
+   メーカーソフトと他のCANアプリは閉じてください。
+2. https://zadig.akeo.ie/ からZadigを取得し、管理者として実行します。
+   **Options → List All Devices** を選び、X2を正確に特定します。
+   キーボード・USBハブなど別の機器を選択しないでください。
+3. 確認したX2のUSBインターフェースを **libusbK** に変更します。
+   libusbKが使えない場合、WinUSBもlibusbで対応する候補ですが、実機で確認が必要です。
+   **libusb-win32は選ばないでください**。メーカーが誤認識の可能性を警告しています。
+4. 変更前のドライバーを記録してください。別のメーカーアプリが使えなくなる可能性があります。
+   復元はデバイスマネージャーまたはメーカーのドライバー導入手順で行います。
+5. `libusb-package` が同じアーキテクチャのlibusb-1.0.dllを提供します。
+   不明なDLLの取得やSystem32の上書きは不要です。ビルドスクリプトはDLLを読み込んで確認します。
 
-   This enumerates gs_usb-compatible devices without sending motor frames. Expect a compatible
-   device entry; no-device errors mean the driver, firmware VID/PID, USB connection or libusb binding
-   needs diagnosis. The pinned gs-usb supports VID/PID pairs `1d50:606f`, `1209:2323`,
-   `1cd2:606f`, `16d0:10b8`; do not silently assume every X2 firmware revision uses these IDs.
-6. Use the X2 manual's pinout for CAN_H/CAN_L and reference/ground. Provide manufacturer-approved
-   RS02 power. Install termination at both ends of the short CAN bus (typically 120 Ω each,
-   approximately 60 Ω across H/L while unpowered); account for built-in termination switches.
-   Secure the motor and keep the shaft unloaded. Verify polarity and have a physical power cutoff.
-7. Power one RS02 configured for its **private RobStride protocol**, classical extended CAN,
-   **1 Mbit/s**. This app does not guess or change a motor's protocol/bitrate. Connect CAN0 first.
-8. Run the read-only diagnostic (replace the ID with the known motor ID):
+X2は1つのUSBインターフェースで2つのCANチャンネルを公開する場合があります。
+アプリはUSBのCANフレーム内でCAN0／CAN1を選択します。USBインターフェース番号と混同しないでください。
 
-   ```powershell
-   uv run --frozen python hardware_smoke_test.py --backend gs_usb --device 0 --channel 0 --motor-id 127 --csv rs02-can0.csv
-   ```
+## 2. 電源OFFで列挙確認
 
-   It never enables or jogs. Discovery and final cleanup do send zero-velocity writes and disable
-   requests, so this is not a passive sniffer. Confirm UUID, parameters, plausible readings and
-   successful cleanup. No response is a failed hardware check, not a successful connection.
-9. Repeat with `--channel 1` after moving the wires to labelled CAN1. Do not assume the channel
-   numbering until verified. Test the GUI, then motion in the sequence in STATUS.md.
+ビルド後、リポジトリ直下のPowerShellで：
 
-If permission/busy errors occur, unplug/replug and close competing clients. For USB backend errors,
-verify Python and DLL architecture and Device Manager binding. For no motor reply, check physical
-channel, wiring, termination, power, ID, protocol and bitrate before attempting motion. Do not run
-loopback examples with a powered motor, random test frames, or another CAN controller's protocol.
+```powershell
+.\.venv\Scripts\python.exe hardware_smoke_test.py --list
+```
+
+製品名・シリアル・USBアドレスを確認します。gs-usb 0.3.0が対応するVID/PIDは
+`1d50:606f`、`1209:2323`、`1cd2:606f`、`16d0:10b8` です。
+X2の全ファームウェアがこれらのIDを使うとは断定できません。
+見つからない場合はUSB接続・Device Managerの割当・DLL・製品のファームウェアを調べてください。
+
+## 3. 配線と通信条件
+
+メーカーのピン配置に従ってCAN_H／CAN_L・基準線を接続し、RS02の指定電源を使います。
+電源OFFで極性と終端を確認してください。一般的な短いCANバスは両端120 Ωずつ、
+H/L間で約60 Ωですが、X2の内蔵終端スイッチも考慮してください。
+
+モーターを固定し、軸を無負荷にして、物理的な電源遮断を準備します。
+モーターは **RobStride私有プロトコル・拡張ID・Classical CAN・1 Mbit/s** に設定されている必要があります。
+アプリは推測によるプロトコル切替・ビットレート変更を行いません。
+
+## 4. モーターを有効化しない通信試験
+
+ラベル上のCAN0につないで、既知のIDに合わせて実行します。
+
+```powershell
+.\.venv\Scripts\python.exe hardware_smoke_test.py --backend gs_usb --device 0 --channel 0 --motor-id 127 --csv rs02-can0.csv
+```
+
+UUID・パラメーター・妥当な測定値・切断時の無効化応答を確認します。
+この試験は有効化・ジョグを送りませんが、検索と終了処理で **速度ゼロ書込み・無効化要求を送ります**。
+受信専用スニファーではありません。無応答は通信試験の失敗です。
+
+電源OFFで配線をCAN1に移し、`--channel 1 --csv rs02-can1.csv` でも確認します。
+チャンネル番号の物理対応は、この実機試験で確かめてください。
+
+## 5. アプリを起動
+
+```powershell
+.\dist\RS02Configurator\RS02Configurator.exe
+```
+
+「実機：USB2CAN-X2 / gs_usb」→「USBを検索」→デバイス選択→CANチャンネル選択→
+1,000,000 bit/s→「接続」→「モーターを検索」の順です。
+初期状態は未接続のシミュレーションであり、起動しただけで実機へ指令は送りません。
+以後の動作・停止・CAN ID変更・配布EXE確認はSTATUS.mdの順に行ってください。
+
+アクセス拒否や使用中エラーでは競合するソフトを閉じます。無応答ではチャンネル・配線・終端・
+電源・ID・プロトコル・速度を先に確認します。モーターに任意のテストフレームや、
+別メーカーのプロトコルを送ったり、電源ONのモーターでループバック例を実行したりしないでください。

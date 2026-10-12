@@ -30,10 +30,27 @@ from service.logging import JsonFormatter
 from service.worker import CanWorker
 
 
+def confirm_japanese(parent, title: str, message: str, _buttons=None, _default=None):
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Icon.Warning)
+    box.setWindowTitle(title)
+    box.setText(message)
+    yes = box.addButton("実行する", QMessageBox.ButtonRole.YesRole)
+    no = box.addButton("キャンセル", QMessageBox.ButtonRole.NoRole)
+    box.setDefaultButton(no)
+    box.setEscapeButton(no)
+    box.exec()
+    return (
+        QMessageBox.StandardButton.Yes
+        if box.clickedButton() == yes
+        else QMessageBox.StandardButton.No
+    )
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("RobStride RS02 • Configurator")
+        self.setWindowTitle("RobStride RS02 • モーター設定ツール")
         self.resize(1100, 780)
         self.connected = False
         self.running_motor = False
@@ -53,17 +70,17 @@ class MainWindow(QMainWindow):
         title = QLabel("RobStride RS02")
         title.setStyleSheet("font-size: 26px; font-weight: 600")
         layout.addWidget(title)
-        self.banner = QLabel("SIMULATED MODE • Disconnected • Disabled")
+        self.banner = QLabel("シミュレーション（SIMULATED MODE）• 未接続 • 無効")
         self.banner.setStyleSheet("background: #163f52; color: white; padding: 12px")
         layout.addWidget(self.banner)
         connection = QHBoxLayout()
         self.backend = QComboBox()
-        self.backend.addItem("Simulated RS02", "simulated")
-        self.backend.addItem("Physical USB2CAN-X2 / gs_usb", "gs_usb")
-        self.backend.addItem("Physical Linux / SocketCAN", "socketcan")
+        self.backend.addItem("シミュレーション：RS02", "simulated")
+        self.backend.addItem("実機：USB2CAN-X2 / gs_usb", "gs_usb")
+        self.backend.addItem("実機：Linux / SocketCAN", "socketcan")
         self.backend.currentIndexChanged.connect(self.update_controls)
         self.devices = QComboBox()
-        self.enumerate_button = QPushButton("Enumerate USB")
+        self.enumerate_button = QPushButton("USBを検索")
         self.enumerate_button.clicked.connect(lambda: self.worker.submit("enumerate"))
         self.channel = QComboBox()
         self.channel.addItems(["CAN 0", "CAN 1"])
@@ -73,9 +90,9 @@ class MainWindow(QMainWindow):
         self.socketcan = QComboBox()
         self.socketcan.setEditable(True)
         self.socketcan.addItems(["can0", "can1"])
-        self.connect_button = QPushButton("Connect")
+        self.connect_button = QPushButton("接続")
         self.connect_button.clicked.connect(self.connect_transport)
-        self.disconnect_button = QPushButton("Disconnect")
+        self.disconnect_button = QPushButton("切断")
         self.disconnect_button.clicked.connect(lambda: self.safe_action("disconnect"))
         for w in (
             self.backend,
@@ -94,38 +111,38 @@ class MainWindow(QMainWindow):
         left = QWidget()
         left_layout = QVBoxLayout(left)
         split.addWidget(left)
-        discovery = QGroupBox("Motor discovery")
+        discovery = QGroupBox("モーターの検索")
         discovery_layout = QFormLayout(discovery)
-        self.scan_button = QPushButton("Scan IDs 1–254")
+        self.scan_button = QPushButton("モーターを検索（ID 1～254）")
         self.scan_button.clicked.connect(self.scan)
         self.motor = QComboBox()
         self.motor.currentIndexChanged.connect(self.select_motor)
         discovery_layout.addRow(self.scan_button)
-        discovery_layout.addRow("Motor / UUID", self.motor)
+        discovery_layout.addRow("モーター / UUID", self.motor)
         self.telemetry = QLabel(
-            "State: unknown\nFaults: unknown\nPosition: — rad\nVelocity: — rad/s\nCurrent: — A\nTemperature: — °C"
+            "状態：不明\n異常：不明\n位置：— rad\n速度：— rad/s\n電流：— A\n温度：— °C"
         )
         self.telemetry.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         discovery_layout.addRow(self.telemetry)
         left_layout.addWidget(discovery)
-        settings = QGroupBox("Conservative operating settings • apply while disabled")
+        settings = QGroupBox("動作設定 • モーターを無効にして適用")
         form = QFormLayout(settings)
         self.mode = QComboBox()
         for text, number in [
             ("MIT (0)", 0),
-            ("Position (1)", 1),
-            ("Velocity (2)", 2),
-            ("Current (3)", 3),
+            ("位置モード (1)", 1),
+            ("速度モード (2)", 2),
+            ("電流モード (3)", 3),
         ]:
             self.mode.addItem(text, number)
         self.mode.setCurrentIndex(2)
-        form.addRow("Run mode", self.mode)
+        form.addRow("動作モード", self.mode)
         self.numeric: dict[str, QDoubleSpinBox] = {}
         for name, label, maximum in [
-            ("current_limit", "Current limit (A)", 2),
-            ("velocity_limit", "Velocity limit (rad/s)", 2),
-            ("acceleration", "Acceleration (rad/s²)", 2),
-            ("jog_velocity", "Jog speed (rad/s)", 0.5),
+            ("current_limit", "電流上限 (A)", 2),
+            ("velocity_limit", "速度上限 (rad/s)", 2),
+            ("acceleration", "加速度 (rad/s²)", 2),
+            ("jog_velocity", "ジョグ速度 (rad/s)", 0.5),
         ]:
             spin = QDoubleSpinBox()
             spin.setRange(0.01, maximum)
@@ -133,21 +150,34 @@ class MainWindow(QMainWindow):
             spin.setValue(getattr(self.config, name))
             self.numeric[name] = spin
             form.addRow(label, spin)
-        self.apply_button = QPushButton("Apply & verify settings")
+        self.apply_button = QPushButton("設定を適用・読み戻し確認")
         self.apply_button.clicked.connect(self.apply_settings)
         form.addRow(self.apply_button)
         left_layout.addWidget(settings)
-        parameters = QGroupBox("Supported SDK parameters")
+        parameters = QGroupBox("対応パラメーター")
         pform = QFormLayout(parameters)
         self.parameter = QComboBox()
+        labels = {
+            "mode": "動作モード",
+            "current_limit": "電流上限",
+            "velocity_limit": "速度上限",
+            "acceleration": "加速度",
+            "velocity_target": "速度目標",
+            "position": "位置",
+            "velocity": "速度",
+            "current": "電流 (iqf)",
+            "bus_voltage": "電源電圧",
+        }
         for name in PARAMETERS:
-            self.parameter.addItem(name + (" (read only)" if name not in WRITABLE else ""), name)
+            self.parameter.addItem(
+                labels[name] + ("（読み取り専用）" if name not in WRITABLE else ""), name
+            )
         self.parameter_value = QDoubleSpinBox()
         self.parameter_value.setRange(-100000, 100000)
         self.parameter_value.setDecimals(4)
-        self.read_button = QPushButton("Read")
+        self.read_button = QPushButton("読み取り")
         self.read_button.clicked.connect(lambda: self.command("read", self.parameter.currentData()))
-        self.write_button = QPushButton("Write & verify")
+        self.write_button = QPushButton("書き込み・確認")
         self.write_button.clicked.connect(
             lambda: self.command(
                 "write", self.parameter.currentData(), self.parameter_value.value()
@@ -162,25 +192,25 @@ class MainWindow(QMainWindow):
         self.new_id = QSpinBox()
         self.new_id.setRange(1, 254)
         self.new_id.setValue(128)
-        self.id_button = QPushButton("Change CAN ID…")
+        self.id_button = QPushButton("CAN IDを変更…")
         self.id_button.clicked.connect(self.change_id)
         pform.addRow(self.new_id, self.id_button)
         left_layout.addWidget(parameters)
         right = QWidget()
         right_layout = QVBoxLayout(right)
         split.addWidget(right)
-        motion = QGroupBox("Motion • explicit enable required")
+        motion = QGroupBox("動作操作 • 有効化が必要")
         m = QVBoxLayout(motion)
-        self.enable_button = QPushButton("Enable motor")
+        self.enable_button = QPushButton("モーターを有効化")
         self.enable_button.clicked.connect(self.enable_motor)
-        self.disable_button = QPushButton("Disable motor")
+        self.disable_button = QPushButton("モーターを無効化")
         self.disable_button.clicked.connect(lambda: self.safe_action("stop"))
-        self.stop_button = QPushButton("STOP • zero velocity + disable")
+        self.stop_button = QPushButton("停止 • 速度ゼロ要求＋無効化")
         self.stop_button.setStyleSheet("background: #a52835; color: white; padding: 12px")
         self.stop_button.clicked.connect(lambda: self.safe_action("stop"))
         jogs = QHBoxLayout()
         self.jog_buttons = []
-        for name, direction in [("Hold to jog reverse", -1), ("Hold to jog forward", 1)]:
+        for name, direction in [("押している間だけ逆転", -1), ("押している間だけ正転", 1)]:
             button = QPushButton(name)
             button.setAutoRepeat(False)
             button.pressed.connect(lambda d=direction: self.jog_press(d))
@@ -193,20 +223,20 @@ class MainWindow(QMainWindow):
         m.addWidget(self.stop_button)
         m.addWidget(
             QLabel(
-                "Releasing jog requests zero speed.\nStop, loss of focus, or jog lease expiry also disables.\nSoftware cannot guarantee stopping after USB or power loss."
+                "ボタンを離すと速度ゼロを要求します。\n停止・フォーカス喪失・継続通知の途絶で無効化も試みます。\nUSB切断や電源喪失時の停止は保証できません。"
             )
         )
         right_layout.addWidget(motion)
         self.messages = QTextEdit()
         self.messages.setReadOnly(True)
         self.messages.document().setMaximumBlockCount(2000)
-        right_layout.addWidget(QLabel("CAN TX / RX and operation log"))
+        right_layout.addWidget(QLabel("CAN送受信（TX / RX）・操作ログ"))
         right_layout.addWidget(self.messages)
         files = QHBoxLayout()
         for text, callback in [
-            ("Save JSON", self.save_config),
-            ("Load JSON", self.load_config),
-            ("Export CAN CSV", self.export_csv),
+            ("設定を保存（JSON）", self.save_config),
+            ("設定を読み込む（JSON）", self.load_config),
+            ("CANログを出力（CSV）", self.export_csv),
         ]:
             b = QPushButton(text)
             b.clicked.connect(callback)
@@ -264,7 +294,7 @@ class MainWindow(QMainWindow):
             w.setEnabled(not self.connected and not self.busy)
         physical = self.backend.currentData() != "simulated"
         self.banner.setText(
-            f"{'PHYSICAL DEVICE MODE • Hardware unverified' if physical else 'SIMULATED MODE • No physical motor'} • {'Connected' if self.connected else 'Disconnected'} • {'Enabled' if self.running_motor else 'Disabled / not enabled by app'}"
+            f"{'実機モード（PHYSICAL DEVICE MODE）• 実機未検証' if physical else 'シミュレーション（SIMULATED MODE）• 実機には通信しません'} • {'接続中' if self.connected else '未接続'} • {'有効' if self.running_motor else '無効／このアプリからは有効化していません'}"
         )
 
     def connect_transport(self) -> None:
@@ -272,7 +302,7 @@ class MainWindow(QMainWindow):
             self.config = self.read_config()
             device = self.devices.currentData()
             if self.config.backend == "gs_usb" and device is None:
-                raise ValueError("Enumerate and select a compatible USB device first")
+                raise ValueError("先に「USBを検索」で対応デバイスを選択してください")
             self.busy = True
             self.update_controls()
             self.worker.submit("connect", self.config, device)
@@ -304,10 +334,10 @@ class MainWindow(QMainWindow):
 
     def enable_motor(self) -> None:
         if (
-            QMessageBox.warning(
+            confirm_japanese(
                 self,
-                "Enable motor",
-                "The motor may produce torque. Secure the motor, clear the shaft and have a power cutoff ready. Enable using the shown conservative settings?",
+                "モーターを有効化",
+                "モーターがトルクを発生する可能性があります。モーターを固定し、軸の周囲を空け、電源を遮断できるようにしてください。表示中の設定で有効化しますか？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -355,10 +385,10 @@ class MainWindow(QMainWindow):
         old = self.motor_id()
         new = self.new_id.value()
         if (
-            QMessageBox.warning(
+            confirm_japanese(
                 self,
-                "Confirm CAN ID change",
-                f"Connect ONLY ONE motor. Disconnect all other motors physically.\nChange motor {old} to {new}?\nThis may persist in motor firmware.",
+                "CAN ID変更の確認",
+                f"接続するモーターは必ず1台だけにしてください。他のモーターは物理的に取り外してください。\nCAN IDを {old} から {new} に変更しますか？\n変更がモーターに保存される場合があります。",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -384,7 +414,7 @@ class MainWindow(QMainWindow):
                 )
             if not value:
                 self.messages.append(
-                    "No compatible gs_usb USB device found. Simulation remains available."
+                    "対応するgs_usb USBデバイスが見つかりません。シミュレーションは利用できます。"
                 )
         elif command == "connect":
             self.connected = True
@@ -393,9 +423,9 @@ class MainWindow(QMainWindow):
             self.running_motor = False
             self.held = False
             self.motor.clear()
-            self.telemetry.setText("Disconnected • telemetry unavailable")
+            self.telemetry.setText("未接続 • 測定値は取得できません")
             if value:
-                self.messages.append("Cleanup attempts failed: " + "; ".join(value))
+                self.messages.append("停止・無効化・切断の試行に失敗：" + "; ".join(value))
         elif command in ("scan", "change_id"):
             self.fill_motors(value)
         elif command == "enable":
@@ -408,16 +438,29 @@ class MainWindow(QMainWindow):
         elif command == "telemetry":
             self.running_motor = value["enabled"]
             self.telemetry.setText(
-                f"ID: {value['id']}  UUID: {value['uuid']}\nState: {value['state']} (0 reset / 1 calibration / 2 running)\nFaults: {value['faults']:#x}\nPosition: {value['position']:.4f} rad\nVelocity: {value['velocity']:.4f} rad/s\nCurrent (iqf): {value['current']:.4f} A\nTemperature: {value['temperature']:.1f} °C"
+                f"ID: {value['id']}  UUID: {value['uuid']}\n状態：{value['state']}（0 リセット / 1 校正 / 2 動作中）\n異常：{value['faults']:#x}\n位置：{value['position']:.4f} rad\n速度：{value['velocity']:.4f} rad/s\n電流 (iqf)：{value['current']:.4f} A\n温度：{value['temperature']:.1f} °C"
             )
         if command not in ("telemetry", "jog_press", "jog_release", "select"):
             self.busy = False
-            self.messages.append(f"{command}: completed")
+            labels = {
+                "enumerate": "USB検索",
+                "connect": "接続",
+                "disconnect": "切断",
+                "scan": "モーター検索",
+                "change_id": "CAN ID変更",
+                "configure": "設定適用",
+                "enable": "有効化",
+                "stop": "停止・無効化",
+                "read": "読み取り",
+                "write": "書き込み・確認",
+                "export": "CSV出力",
+            }
+            self.messages.append(f"{labels.get(command, command)}：完了")
         self.update_controls()
 
     def on_error(self, error: str) -> None:
         self.busy = False
-        self.messages.append("ERROR: " + error)
+        self.messages.append("エラー：" + error)
         self.statusBar().showMessage(error)
         self.update_controls()
 
@@ -427,9 +470,7 @@ class MainWindow(QMainWindow):
         )
 
     def save_config(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save configuration", "rs02.json", "JSON (*.json)"
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "設定を保存", "rs02.json", "JSON (*.json)")
         if path:
             try:
                 self.read_config().save(path)
@@ -438,9 +479,9 @@ class MainWindow(QMainWindow):
 
     def load_config(self) -> None:
         if self.connected or self.busy:
-            self.on_error("Disconnect before loading configuration")
+            self.on_error("設定を読み込む前に切断してください")
             return
-        path, _ = QFileDialog.getOpenFileName(self, "Load configuration", "", "JSON (*.json)")
+        path, _ = QFileDialog.getOpenFileName(self, "設定を読み込み", "", "JSON (*.json)")
         if path:
             try:
                 c = Configuration.load(path)
@@ -457,7 +498,7 @@ class MainWindow(QMainWindow):
                 self.on_error(str(exc))
 
     def export_csv(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Export CAN log", "can-log.csv", "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, "CANログを出力", "can-log.csv", "CSV (*.csv)")
         if path:
             self.worker.submit("export", path)
 
@@ -468,7 +509,7 @@ class MainWindow(QMainWindow):
             self.held = False
             self.timer.stop()
             self.centralWidget().setEnabled(False)
-            self.banner.setText("Closing • requesting zero velocity, disable, and transport close…")
+            self.banner.setText("終了処理中 • 速度ゼロ・無効化を要求して通信を閉じています…")
             self.worker.submit("exit")
         else:
             event.accept()
@@ -494,7 +535,7 @@ def main() -> int:
         logging.getLogger("rs02.gui").error(
             "Unhandled GUI exception", exc_info=(exc_type, exc, traceback)
         )
-        window.on_error(f"Unhandled exception: {exc}; safety disconnect requested")
+        window.on_error(f"未処理の例外：{exc}；安全のため切断を要求しました")
 
     sys.excepthook = safe_exception_hook
 

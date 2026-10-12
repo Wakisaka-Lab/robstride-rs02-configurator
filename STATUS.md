@@ -1,127 +1,119 @@
-# Implementation status
+# 実装・検証状況（日本語版）
 
-Recorded 2026-10-12 (Asia/Tokyo). Next hardware session: **2026-10-13**, if testing tomorrow.
+2026-10-12（日本時間）更新。ソース実装とクラウドでのシミュレーション検証は完了しています。
+**Windowsでのビルド・起動、USB2CAN-X2／RS02の実機通信は未検証です。**
+指定されたWindowsのCドライブはこのクラウドから操作できません。
 
-## Completed functions
+## 完了した機能
 
-- Python 3.11 / PySide6 desktop application and installable project with locked dependencies.
-- Disconnected startup; explicit simulation/physical labels; no automatic enable or JSON auto-connect.
-- gs_usb-compatible USB enumeration, device and CAN0/CAN1 selection, bitrate selection (default 1 Mbit/s).
-- Windows gs_usb transport based on python-can, per-channel extension from the manufacturer driver,
-  architecture-matched libusb-package; optional Linux SocketCAN and FakeCanTransport.
-- Official Python SDK vendored unchanged with license, commit and hashes; transport abstraction,
-  bounded correlated receive, source-backed CAN ID correction, parameter and status decoding.
-- Dedicated CAN worker QThread; cancellable scan, queued command handling and priority stop/disconnect.
-- Scan IDs 1–254; UUID, state/faults, position/velocity/current/temperature display.
-- Supported parameter reads, restricted writes with readback, mode/limits/acceleration configuration.
-- Explicit confirmed single-motor ID change, collision query, new-ID UUID check and ambiguous-ID cleanup.
-- Explicit enable, disable/stop, conservative defaults and mode-specific neutral targets before enabling.
-- Forward/reverse hold-only velocity jog; pre-send hold recheck, release zero request, focus-loss stop,
-  350 ms GUI-heartbeat lease expiry, and no queued jog after a stop/disconnect.
-- Disconnect/exit/worker-exception zero-velocity request → disable attempt → transport close;
-  cleanup continues after errors and reports failures. Unhandled GUI exceptions request disconnect.
-- Structured JSON logging, bounded CAN TX/RX GUI log and CSV export, validated versioned JSON config.
-- Safe smoke-test CLI, Windows PyInstaller spec, driver/setup guide and development instructions.
+- Python 3.11／PySide6の日本語GUI。接続・検索・設定・動作・測定値・ファイル操作を日本語表示。
+- 有効化／CAN ID変更の日本語確認ダイアログ。「キャンセル」が初期選択とEscapeの動作。
+- 未接続・シミュレーションでの起動。設定読み込みによる自動接続・自動有効化なし。
+- gs_usb対応USB列挙、デバイスとCAN0／CAN1、ビットレート選択。標準は1 Mbit/s。
+- python-can gs_usbに基づくWindows通信層、メーカー資料に基づくチャンネル拡張、libusb DLL同梱。
+- Linux SocketCAN、FakeCanTransport、シミュレーション用RS02。
+- 公式SDKを変更せず同梱。通信抽象化、応答照合・タイムアウト、公式C++に基づくID変更の修正。
+- GUI外のCANワーカー、検索中断、停止・切断の優先処理。
+- ID 1～254検索、UUID・状態・異常、位置・速度・電流・温度表示。
+- 対応パラメーター読み取り、制限付き書込みと読み戻し確認。動作モード・電流／速度上限・加速度設定。
+- 1台限定・明示確認・ID衝突照会・UUID照合によるID変更。不確実な結果では新旧IDで停止を試行。
+- 明示的な有効化／無効化、控えめな初期値、有効化前のモード別ニュートラル目標。
+- 押している間だけの正逆ジョグ。送信直前の押下再確認、解放時ゼロ速度、フォーカス喪失と350 ms通知期限で停止。
+- 設定中の停止・切断・終了要求による後続有効化の取り消し。
+- 切断・終了・例外時の速度ゼロ→無効化→通信を閉じる処理。個々の失敗後も後続処理を試行して報告。
+- 構造化ログ、CAN送受信表示、CSV出力、バージョン付きJSON設定。
+- Windows用ビルドスクリプト、PyInstaller設定、配布ZIP、Zadig／libusbKの日本語手順。
 
-## Verification results
+## 検証結果
 
-Actual cloud execution used **Python 3.11.17 on Linux**:
+クラウドのLinux／Python **3.11.17** で実行しています。
 
-| Check | Result |
+| 検査 | 結果 |
 | --- | --- |
-| Complete automated suite (`QT_QPA_PLATFORM=offscreen .venv/bin/pytest -q`) | **56 passed**, no skips or expected failures |
-| `ruff check .` | Passed |
-| `ruff format --check src tests hardware_smoke_test.py desktop_main.py` | Passed |
-| `mypy` | Passed, 14 source files |
-| Simulated `hardware_smoke_test.py` | Passed; UUID/parameters/telemetry returned; no enable; CSV written |
-| Qt GUI startup/rendering | Passed offscreen; simulated GUI press/release and closing exercised |
-| Official SDK source hash check | Passed, all four Python files unchanged |
-| Mocked USB channel control/TX/RX and backend construction | Passed for CAN0 and CAN1 |
-| Dependency install repeatability (`uv sync --frozen`) | Passed |
-| Source distribution and wheel build | Passed; wheel includes official SDK license |
-| Physical USB enumeration / transport startup | **Not verified**; cloud lacks USB device access |
-| Actual Windows executable build / launch | **Not run**; requires Windows x64 |
-| RS02 physical communications or motion | **Not run**; no USB2CAN-X2 or RS02 attached |
+| 全自動テスト（オフスクリーンQt GUIを含む） | **58件成功**。スキップ・想定失敗なし |
+| `ruff check .` | 成功 |
+| `ruff format --check src tests hardware_smoke_test.py desktop_main.py` | 成功 |
+| `mypy` | 成功（14ソースファイル） |
+| シミュレーション版 `hardware_smoke_test.py` | 成功。UUID・測定値・パラメーター取得、CSV出力、有効化なし |
+| 日本語確認ダイアログ | 実際のQtダイアログで実行／キャンセルとキャンセル初期選択を確認 |
+| 公式SDKのPythonファイルのハッシュ | 4ファイルとも元のまま |
+| USBチャンネル制御・送受信・通信層の構築 | モックでCAN0／CAN1を確認 |
+| ロック依存導入・Python配布パッケージ | 導入再実行、ソース／wheelビルド、SDKライセンス同梱を確認 |
+| Windowsビルドスクリプト | PowerShellの構文解析を実施。Windows上の実行は未実施 |
+| Windows EXEのビルド／起動 | **未実施**。Windows x64で必要 |
+| USB2CAN-X2／RS02の実機通信・動作 | **未実施**。実機がないため |
 
-Tests include scan and quiescing an already-running simulated motor; parameter read/write/validation;
-source-backed wire fixtures; confirmation/collision/ambiguous ID handling; enable/disable; both jog
-directions and release; release during delayed preflight; zero/disable/close ordering on disconnect
-and exit; cleanup failures; CAN worker thread ownership; exception shutdown; priority stop/disconnect; cancellation of enable during configuration;
-lease expiry; Qt confirmation cancellation; JSON/CSV; USB channel mapping and unplug-error propagation.
-The simulator and mocked USB do **not** prove physical protocol/firmware compatibility.
+検索、稼働中の模擬モーターの無効化、パラメーター、公式資料の送信バイト例、ID変更・衝突・不確実な変更、
+有効化／無効化、正逆ジョグと解放、事前読取り中の解放、終了時の指令順序、停止／切断の優先、
+設定中の有効化取り消し、例外、USBモック、日本語GUIをテストしています。
+これらはファームウェアや実機互換性の証明ではありません。
+詳細なライブラリーエラー、構造化ログの内部キーなどは調査のため英語表記が残ります。
 
-## Unverified hardware assumptions and limits
+## 未検証の実機条件・制限
 
-- X2 firmware matches a VID/PID recognized by gs-usb 0.3.0, reports `icount + 1` channels and uses
-  manufacturer gs_usb control `wValue` / frame.channel mapping. Physical CAN0/CAN1 labels need checking.
-- Windows Zadig libusbK binding, Python x64/libusb DLL load, exclusive USB ownership and PyInstaller
-  DLL inclusion need validation on the target Windows machine. Cloud libusb loads but cannot initialize
-  a USB backend: `/dev/bus/usb` and `/sys/bus/usb/devices` are absent. No-driver/no-device is not proof
-  that physical transport works. Linux SocketCAN physical operation is also unverified.
-- RS02 is powered/wired/terminated correctly, uses the private RobStride protocol, 29-bit classical CAN
-  and 1 Mbit/s. The app does not guess protocol switching or transmit arbitrary probe frames.
-- Firmware supports the documented SDK parameter indices, especially acceleration `0x7022`, and the
-  chosen modes (0 MIT, 1 position, 2 velocity, 3 current). Write status acknowledgements and readback
-  behavior, UUID response destination (`0xFE` or host) and CAN-ID change need physical confirmation.
-- State/fault decoding and model scaling follow the pinned SDK; temperature/status reflect the latest
-  status frame. Parameter polling does not guarantee a new temperature/state sample on every poll.
-- Limits are conservative application defaults, not a guaranteed safety envelope. Parameter persistence
-  and motor CAN watchdog behavior have not been established. No flash save/watchdog setup is fabricated.
-- USB unplug, process termination, OS hangs, power loss and undeliverable commands cannot ensure a stop.
-  Software cleanup covers known IDs only and reports best-effort failures. Have an independent cutoff.
-- The Windows EXE is configured but has not been built/tested; no cross-platform binary claim is made.
+- X2のファームウェアがgs-usb 0.3.0の対応VID/PIDを使用し、`icount + 1` とチャンネルの仕様に従うこと。
+  CAN0／CAN1の物理ラベルとの対応は実機で確認が必要です。
+- WindowsのlibusbK／WinUSB割当、64ビットDLLの読込み、USBの排他利用、EXEへのDLL同梱と読込み。
+  クラウドには `/dev/bus/usb` と `/sys/bus/usb/devices` がなく、USBバックエンドは初期化できません。
+- RS02の配線・終端・電源、私有プロトコル、拡張Classical CAN、1 Mbit/sの設定。
+- SDK記載のパラメーター、特に加速度 `0x7022` とモード0／1／2／3の実際のサポート。
+  書込み状態応答、読み戻し、UUID応答先、ID変更の応答はファームウェアで確認が必要です。
+- 状態／温度は最後の状態フレームの値です。パラメーター取得ごとに新しい状態／温度を取得するとは限りません。
+- 電流／速度制限はアプリの初期値であり、保証された安全範囲ではありません。
+  設定の永続化やCANウォッチドッグの動作は不明です。推測による保存・ウォッチドッグ設定は送りません。
+- USB抜去、電源喪失、OS停止、強制終了では指令の配送を保証できません。独立した電源遮断が必要です。
+  ソフトウェア停止は既知のIDに対するベストエフォートで、失敗は報告します。
+- Linux SocketCANの実機通信も未検証です。Linuxでの検証をWindows EXE検証とは扱いません。
 
-## Exact next-session hardware checklist
+## 指定フォルダーでの実機試験手順
 
-Follow `docs/windows_setup.md` first. Record every step's result rather than marking this list complete
-based on simulation. Do not progress to enable or jog after any earlier unexplained failure.
+前提：最新main全体を `C:\Users\ATSUYA_WATANABE\Documents\robstride-rs02-configurator-main`
+に配置します。シミュレーション成功だけで以下を完了扱いにしないでください。
+未解決の失敗があれば有効化／ジョグに進まないでください。
 
-1. On Windows 10/11 x64, install Python 3.11 and uv. In the checkout run:
-   `uv sync --frozen --extra dev --python 3.11`.
-   Run `uv run --frozen --extra dev pytest -q` with `$env:QT_QPA_PLATFORM="offscreen"`, then remove
-   that environment variable. Run `ruff check .` and `mypy` through `uv run --frozen --extra dev`.
-2. With motor power OFF, plug in X2. Close all vendor/other CAN clients. Record serial, VID/PID,
-   firmware version if available and current Windows driver. Use Zadig to bind the correctly identified
-   X2 USB interface to **libusbK**; do not bind an unrelated device or select libusb-win32.
-3. Run `uv run --frozen python hardware_smoke_test.py --list`. Record enumerated product/serial,
-   device index and USB bus/address. Resolve driver/DLL/access issues if no usable entry appears.
-4. Wire one secured, unloaded RS02 to **labelled CAN0** using the manufacturer pinout; verify power
-   polarity, CAN_H/L, reference/ground and termination while unpowered. Provide a physical cutoff.
-   Confirm the motor is configured for private protocol, extended classical CAN and **1 Mbit/s**.
-5. Power the motor. For the known motor ID (replace 127 if different), run:
-   `uv run --frozen python hardware_smoke_test.py --backend gs_usb --device 0 --channel 0 --motor-id 127 --csv rs02-can0.csv`.
-   The CLI sends UUID/parameter requests and zero/disable, never enable. Require a consistent UUID,
-   plausible position/current/voltage/temperature, parameter replies and successful disabled cleanup.
-6. Power OFF; move wires to **labelled CAN1**. Repeat step 5 with `--channel 1 --csv rs02-can1.csv`.
-   Record channel correspondence. Restore desired channel only while unpowered.
-7. Launch `uv run --frozen rs02-configurator`. Confirm disconnected startup. Select physical gs_usb,
-   enumerate/select the X2, select the verified channel and 1 Mbit/s. Connect/scan; verify UUID and
-   disabled state. Read parameters, save JSON, disconnect, reload JSON and confirm no auto-connect.
-8. Connect/scan again. While disabled, apply mode 2, **0.5 A current**, **0.5 rad/s velocity**,
-   **0.5 rad/s² acceleration**, **0.2 rad/s jog**. Require matching readback. If acceleration or another
-   parameter is unsupported, record firmware/response and stop; do not bypass checks or guess an index.
-9. With the shaft clear and cutoff ready, explicitly Enable. Confirm reported running state with zero
-   measured velocity and reasonable current. Hold forward briefly (<0.5 s), release and verify zero
-   target/velocity. Repeat reverse. Click Stop and verify zero target plus disabled state. Record signs,
-   units, motion, current and temperature; stop immediately on faults or unexpected movement.
-10. Re-enable/briefly jog, then verify focus-loss stop, Disconnect stop and window-close stop separately.
-    Check transmitted zero then disable and actual physical stopping. Test unplug only with a safe,
-    secured setup and power cutoff; delivery cannot be guaranteed and unplug is not a successful stop test.
-11. With motor disabled and **only one motor physically connected**, choose a spare ID (e.g. 128),
-    confirm the explicit warning, change ID and verify the **same UUID** at the new address. Rescan.
-    Return to the original ID if desired. Power cycle and record whether the ID/settings persist;
-    persistence is not assumed. Do not ID-change a powered multi-motor bus.
-12. Export GUI CAN CSV and retain CLI CSVs plus notes (driver/firmware, wiring, ID, channel and faults).
-    Build on Windows with `uv run --frozen --extra dev pyinstaller --clean --noconfirm RS02Configurator.spec`.
-    Launch `dist\RS02Configurator\RS02Configurator.exe`; confirm simulated startup, physical enumeration,
-    libusb loading and safe close. Distribute the entire directory. Record binary build/launch separately.
+1. Python 3.11 x64とPythonランチャーを導入します。PowerShellを開き直し、次を実行します。
 
-Cloud source implementation and simulation are complete. Physical readiness remains conditional on the
-above hardware/Windows checks; this document does not assert those checks have passed.
+   ```powershell
+   Set-Location 'C:\Users\ATSUYA_WATANABE\Documents\robstride-rs02-configurator-main'
+   Unblock-File '.\scripts\build_windows.ps1'
+   powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File '.\scripts\build_windows.ps1' -Launch
+   ```
 
-## Reusable cloud configuration
+   テスト・DLL確認・EXEビルドが成功し、未接続の日本語シミュレーション画面が開くことを確認します。
+2. モーターの電源OFFでX2だけを接続します。他のCANクライアントを閉じ、製品・シリアル・VID/PID・
+   元のドライバーを記録します。Zadigで正しいX2のインターフェースだけをlibusbKに変更します。
+   詳細は `docs/windows_setup.md`。ビルドスクリプトはドライバーを変更しません。
+3. `.\.venv\Scripts\python.exe hardware_smoke_test.py --list` を実行します。
+   列挙結果を記録し、DLL・割当・アクセスの問題があれば解決します。
+4. 電源OFFで1台のRS02をラベル上のCAN0へ接続します。極性、CAN_H／L、基準線、終端を確認し、
+   固定・無負荷・物理電源遮断を準備します。私有プロトコル・拡張Classical CAN・1 Mbit/sを確認します。
+5. 電源ONで既知のIDに合わせて実行します（127は例）。
 
-`install_script` and `start_skill` were saved successfully to the environment configuration draft.
-The installation script was exercised on this instance, including repeat `uv sync --frozen`.
-Saving did not publish or apply a new environment version. Review/save the draft in environment
-settings and Publish when desired. A new-task snapshot restoration has not been tested.
+   ```powershell
+   .\.venv\Scripts\python.exe hardware_smoke_test.py --backend gs_usb --device 0 --channel 0 --motor-id 127 --csv rs02-can0.csv
+   ```
+
+   有効化／ジョグは送りませんが、ゼロ速度・無効化要求は送ります。
+   UUID・妥当な測定値・パラメーター返信・無効化した切断結果を確認します。
+6. 電源OFFでCAN1へ移し、`--channel 1 --csv rs02-can1.csv` で同じ確認をします。
+   物理チャンネルの対応を記録します。
+7. アプリで実機gs_usbを選択し、USB検索・デバイス・検証したチャンネル・1 Mbit/sを設定して接続・検索します。
+   UUIDと無効状態を確認します。JSON保存→切断→読み込みでも自動接続しないことを確認します。
+8. 無効状態でモード2、電流0.5 A、速度0.5 rad/s、加速度0.5 rad/s²、ジョグ0.2 rad/sを適用します。
+   読み戻しを確認します。未対応パラメーターなら記録して停止し、インデックスを推測して回避しません。
+9. 軸を空け、電源遮断を用意して明示的に有効化します。状態とゼロ速度・妥当な電流を確認します。
+   正転を0.5秒未満保持→解放→ゼロ目標・速度を確認し、逆転も同様に確認します。
+   「停止」でゼロ速度と無効状態を確認します。異常や想定外の動作なら直ちに物理停止します。
+10. フォーカス喪失、切断、ウィンドウ終了でゼロ→無効化の送信と実際の停止をそれぞれ確認します。
+    USB抜去で配送を保証できるとは扱わず、試す場合は独立した安全策を用意します。
+11. 無効状態・物理的に1台だけで、空いたID（例128）への変更を明示確認します。
+    新IDで同じUUIDを確認し、必要なら元へ戻します。電源再投入後のID／設定の永続化を記録します。
+12. CSVとドライバー・ファームウェア・配線・チャンネル・ID・異常の記録を保存します。
+    `dist\RS02Configurator\RS02Configurator.exe` で日本語表示、USB列挙、DLL読込み、安全終了を確認します。
+    配布はフォルダー全体または `dist\RS02Configurator-Windows-x64-ja.zip` を使用します。
+
+## クラウド設定
+
+`install_script` と `start_skill` は保存済みです。導入スクリプトはこのインスタンスで実行・再実行しました。
+保存は公開や新しいインスタンスでの復元検証を意味しません。必要なら環境設定で確認・保存してPublishします。
+日本語化とWindowsスクリプトの追加も、Windowsでの実機検証とは区別します。

@@ -110,10 +110,10 @@ def test_gui_full_simulated_flow_and_close(qtbot, monkeypatch):
     qtbot.waitUntil(lambda: window.motor_id() == 127 and not window.busy)
     fake = window.worker.service.sdk.channel_handler.inner
     assert not fake.motors[0].enabled
-    monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr("gui.app.confirm_japanese", lambda *args: QMessageBox.StandardButton.Yes)
     qtbot.mouseClick(window.enable_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: window.running_motor)
-    qtbot.waitUntil(lambda: "Temperature" in window.telemetry.text())
+    qtbot.waitUntil(lambda: "温度" in window.telemetry.text())
     # Offscreen platform has no reliable native active-window state.
     monkeypatch.setattr(window, "isActiveWindow", lambda: True)
     button = window.jog_buttons[1]
@@ -135,7 +135,7 @@ def test_gui_id_cancel_sends_no_change(qtbot, monkeypatch):
         window.scan()
         qtbot.waitUntil(lambda: window.motor_id() == 127 and not window.busy)
         fake = window.worker.service.sdk.channel_handler.inner
-        monkeypatch.setattr(QMessageBox, "warning", lambda *a: QMessageBox.StandardButton.No)
+        monkeypatch.setattr("gui.app.confirm_japanese", lambda *a: QMessageBox.StandardButton.No)
         window.change_id()
         qtbot.wait(100)
         assert not any(m.arbitration_id >> 24 == 7 for m in fake.sent)
@@ -240,3 +240,35 @@ def test_enable_canceled_during_configuration(worker, qtbot, monkeypatch, safety
         qtbot.waitUntil(lambda: not worker.stop_requested.is_set())
     assert not fake.motors[0].enabled
     assert not any(m.arbitration_id >> 24 == 3 for m in fake.sent)
+
+
+@pytest.mark.parametrize("execute", [False, True])
+def test_japanese_confirmation_defaults_to_cancel(qtbot, execute):
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from gui.app import confirm_japanese
+
+    observed = []
+
+    def inspect_and_choose():
+        box = QApplication.activeModalWidget()
+        observed.append(
+            (
+                box.windowTitle(),
+                box.defaultButton().text(),
+                box.escapeButton().text(),
+                [b.text() for b in box.buttons()],
+            )
+        )
+        chosen = next(
+            b for b in box.buttons() if b.text() == ("実行する" if execute else "キャンセル")
+        )
+        chosen.click()
+
+    QTimer.singleShot(0, inspect_and_choose)
+    result = confirm_japanese(None, "CAN ID変更の確認", "モーターは1台だけ接続してください。")
+    assert observed == [
+        ("CAN ID変更の確認", "キャンセル", "キャンセル", ["実行する", "キャンセル"])
+    ]
+    assert result == (QMessageBox.StandardButton.Yes if execute else QMessageBox.StandardButton.No)
