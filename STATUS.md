@@ -39,7 +39,7 @@
 | 公式SDKのPythonファイルのハッシュ | 4ファイルとも元のまま |
 | USBチャンネル制御・送受信・通信層の構築 | モックでCAN0／CAN1を確認 |
 | ロック依存導入・Python配布パッケージ | 導入再実行、ソース／wheelビルド、SDKライセンス同梱を確認 |
-| Windowsビルドスクリプト | PowerShellの構文解析を実施。Windows上の実行は未実施 |
+| Windowsビルドスクリプト | 構文確認済み。ユーザーのWindowsでDLL読込み・58テスト・lint・整形成功。mypy.exeの起動が制御ポリシーで停止したためPythonモジュール起動へ修正。修正版のWindows実行は未確認 |
 | Windows EXEのビルド／起動 | **未実施**。Windows x64で必要 |
 | USB2CAN-X2／RS02の実機通信・動作 | **未実施**。実機がないため |
 

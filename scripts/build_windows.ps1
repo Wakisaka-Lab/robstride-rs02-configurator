@@ -44,7 +44,8 @@ try {
     }
     Invoke-Checked (Join-Path $ProjectRoot '.venv\Scripts\ruff.exe') @('check', '.')
     Invoke-Checked (Join-Path $ProjectRoot '.venv\Scripts\ruff.exe') @('format', '--check', 'src', 'tests', 'hardware_smoke_test.py', 'desktop_main.py')
-    Invoke-Checked (Join-Path $ProjectRoot '.venv\Scripts\mypy.exe') @()
+    # Use the same Python interpreter as pytest; no separate console launcher needed.
+    Invoke-Checked $AppPython @('-m', 'mypy')
     Invoke-Checked $AppPython @('-m', 'PyInstaller', '--clean', '--noconfirm', 'RS02Configurator.spec')
     $Bundle = Join-Path $ProjectRoot 'dist\RS02Configurator'
     $Exe = Join-Path $Bundle 'RS02Configurator.exe'
