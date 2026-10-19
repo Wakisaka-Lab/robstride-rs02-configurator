@@ -272,3 +272,36 @@ def test_japanese_confirmation_defaults_to_cancel(qtbot, execute):
         ("CAN ID変更の確認", "キャンセル", "キャンセル", ["実行する", "キャンセル"])
     ]
     assert result == (QMessageBox.StandardButton.Yes if execute else QMessageBox.StandardButton.No)
+
+
+def test_gui_high_speed_settings_and_confirmation(qtbot, monkeypatch):
+    window = MainWindow()
+    qtbot.addWidget(window)
+    try:
+        window.connect_transport()
+        qtbot.waitUntil(lambda: window.connected)
+        window.scan()
+        qtbot.waitUntil(lambda: window.motor_id() == 127 and not window.busy)
+        assert window.numeric["velocity_limit"].maximum() == 44
+        assert window.numeric["jog_velocity"].maximum() == 44
+        window.numeric["velocity_limit"].setValue(10)
+        window.numeric["jog_velocity"].setValue(3)
+        captured = []
+
+        def cancel_enable(*args):
+            captured.append(args[2])
+            return QMessageBox.StandardButton.No
+
+        monkeypatch.setattr("gui.app.confirm_japanese", cancel_enable)
+        window.enable_motor()
+        assert "速度上限：10 rad/s" in captured[0]
+        assert "ジョグ速度：3 rad/s" in captured[0]
+        assert "2 rad/sを超える" in captured[0]
+        assert not window.worker.service.enabled
+        window.apply_settings()
+        qtbot.waitUntil(lambda: not window.busy)
+        fake = window.worker.service.sdk.channel_handler.inner
+        assert fake.motors[0].parameters[0x7017] == 10
+    finally:
+        window.close()
+        qtbot.waitUntil(lambda: not window.worker.isRunning())

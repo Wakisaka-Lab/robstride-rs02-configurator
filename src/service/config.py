@@ -3,6 +3,17 @@ import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from robstride_dynamics.table import MODEL_MIT_VELOCITY_TABLE
+
+# Application ceilings. SDK MIT feedback range is a reference, not a firmware guarantee.
+MAX_RS02_VELOCITY = float(MODEL_MIT_VELOCITY_TABLE["rs-02"])
+SETTING_LIMITS = {
+    "current_limit": 2.0,
+    "velocity_limit": MAX_RS02_VELOCITY,
+    "acceleration": 2.0,
+    "jog_velocity": MAX_RS02_VELOCITY,
+}
+
 
 @dataclass
 class Configuration:
@@ -29,12 +40,7 @@ class Configuration:
             raise ValueError("Channel must be 0 or 1")
         if self.mode not in (0, 1, 2, 3):
             raise ValueError("Unsupported mode")
-        for name, ceiling in [
-            ("current_limit", 2.0),
-            ("velocity_limit", 2.0),
-            ("acceleration", 2.0),
-            ("jog_velocity", 0.5),
-        ]:
+        for name, ceiling in SETTING_LIMITS.items():
             value = getattr(self, name)
             if (
                 type(value) not in (float, int)

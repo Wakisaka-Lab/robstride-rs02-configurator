@@ -8,7 +8,7 @@ from typing import Callable, Iterable
 from robstride_dynamics.protocol import ParameterType as P
 
 from protocol.sdk import PARAMETERS, WRITABLE, SdkAdapter, Status
-from service.config import Configuration
+from service.config import SETTING_LIMITS, Configuration
 from service.logging import CanLog, LoggedTransport
 from transport.can_transport import CanTransport
 
@@ -78,8 +78,8 @@ class MotorService:
             if value not in (0, 1, 2, 3):
                 raise ValueError("Mode must be 0, 1, 2 or 3")
             value = int(value)
-        elif not 0 < value <= 2:
-            raise ValueError("MVP limits must be >0 and <=2 (A, rad/s, rad/s²)")
+        elif not 0 < value <= SETTING_LIMITS[parameter]:
+            raise ValueError(f"{parameter} must be >0 and <= {SETTING_LIMITS[parameter]}")
         sdk.write(str(motor_id), PARAMETERS[parameter], value)
         actual = self.read(motor_id, parameter)
         if not math.isclose(actual, value, rel_tol=1e-5, abs_tol=1e-6):
@@ -118,6 +118,7 @@ class MotorService:
         self, motor_id: int, direction: int, still_held: Callable[[], bool] = lambda: True
     ) -> None:
         sdk = self.require(motor_id)
+        self.config.validate()
         if motor_id not in self.enabled or direction not in (-1, 1):
             raise RuntimeError("Explicit enable and valid jog direction required")
         if self.read(motor_id, "mode") != 2:

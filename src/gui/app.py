@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from protocol.sdk import PARAMETERS, WRITABLE
-from service.config import Configuration
+from service.config import SETTING_LIMITS, Configuration
 from service.logging import JsonFormatter
 from service.worker import CanWorker
 
@@ -138,14 +138,14 @@ class MainWindow(QMainWindow):
         self.mode.setCurrentIndex(2)
         form.addRow("動作モード", self.mode)
         self.numeric: dict[str, QDoubleSpinBox] = {}
-        for name, label, maximum in [
-            ("current_limit", "電流上限 (A)", 2),
-            ("velocity_limit", "速度上限 (rad/s)", 2),
-            ("acceleration", "加速度 (rad/s²)", 2),
-            ("jog_velocity", "ジョグ速度 (rad/s)", 0.5),
+        for name, label in [
+            ("current_limit", "電流上限 (A)"),
+            ("velocity_limit", "速度上限 (rad/s)"),
+            ("acceleration", "加速度 (rad/s²)"),
+            ("jog_velocity", "ジョグ速度 (rad/s)"),
         ]:
             spin = QDoubleSpinBox()
-            spin.setRange(0.01, maximum)
+            spin.setRange(0.01, SETTING_LIMITS[name])
             spin.setSingleStep(0.05)
             spin.setValue(getattr(self.config, name))
             self.numeric[name] = spin
@@ -333,11 +333,24 @@ class MainWindow(QMainWindow):
             self.on_error(str(exc))
 
     def enable_motor(self) -> None:
+        try:
+            config = self.read_config()
+        except Exception as exc:
+            self.on_error(str(exc))
+            return
+        settings = (
+            f"電流上限：{config.current_limit:g} A\n"
+            f"速度上限：{config.velocity_limit:g} rad/s\n"
+            f"ジョグ速度：{config.jog_velocity:g} rad/s\n"
+        )
+        if config.velocity_limit > 2 or config.jog_velocity > 2:
+            settings += "2 rad/sを超える速度設定です。負荷・固定・電源遮断を確認してください。\n"
         if (
             confirm_japanese(
                 self,
                 "モーターを有効化",
-                "モーターがトルクを発生する可能性があります。モーターを固定し、軸の周囲を空け、電源を遮断できるようにしてください。表示中の設定で有効化しますか？",
+                settings
+                + "モーターがトルクを発生する可能性があります。モーターを固定し、軸の周囲を空け、電源を遮断できるようにしてください。表示中の設定で有効化しますか？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )

@@ -305,3 +305,44 @@ def test_vendor_sources_remain_byte_identical():
     root = Path(__file__).resolve().parents[1] / "vendor" / "robstride_dynamics"
     for name, checksum in expected.items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == checksum
+
+
+@pytest.mark.parametrize("speed", [3.0, 10.0, 44.0])
+def test_velocity_mode_above_two_rad_per_second(setup_motor, tmp_path, speed):
+    service, _, motor = setup_motor
+    service.config.velocity_limit = speed
+    service.config.jog_velocity = speed
+    path = tmp_path / "high-speed.json"
+    service.config.save(path)
+    service.config = Configuration.load(path)
+    service.enable(127)
+    assert service.read(127, "velocity_limit") == pytest.approx(speed)
+    for direction in (1, -1):
+        service.jog_press(127, direction)
+        assert motor.parameters[0x700A] == pytest.approx(direction * speed)
+        service.jog_release(127)
+        assert motor.parameters[0x700A] == 0
+    service.stop(127)
+    assert not motor.enabled
+
+
+@pytest.mark.parametrize(
+    "name,value", [("velocity_limit", 44.01), ("current_limit", 2.01), ("acceleration", 2.01)]
+)
+def test_parameter_ceiling_rejected_before_can_send(setup_motor, name, value):
+    service, fake, _ = setup_motor
+    before = len(fake.sent)
+    with pytest.raises(ValueError):
+        service.write(127, name, value)
+    assert len(fake.sent) == before
+
+
+@pytest.mark.parametrize("speed", [44.01, float("inf"), float("nan")])
+def test_jog_ceiling_validation(speed):
+    with pytest.raises(ValueError):
+        Configuration(velocity_limit=44, jog_velocity=speed).validate()
+
+
+def test_jog_cannot_exceed_selected_velocity_limit():
+    with pytest.raises(ValueError, match="exceeds velocity limit"):
+        Configuration(velocity_limit=3, jog_velocity=4).validate()
